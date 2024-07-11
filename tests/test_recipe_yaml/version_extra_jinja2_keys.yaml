@@ -1,0 +1,88 @@
+schema_version: 1
+
+context:
+  name: satpy
+  version: 0.19.1
+  file_ext: tar.gz
+  hash_type: sha256
+  hash_value: cfa095509f18b7e30723f31511f23e8c74028fed2626ecfa7b4d31c93b4dd503
+
+package:
+  name: ${{ name|lower }}
+  version: ${{ version }}
+
+source:
+  url: https://pypi.io/packages/source/${{ name[0] }}/${{ name }}/${{ name }}-${{ version }}.${{ file_ext }}
+  file_name: ${{ name }}-${{ version }}.${{ file_ext }}
+  __RECIPE_MANAGER_SUBSTITUTION_MARKER__: ${{ hash_type }}
+
+build:
+  number: 0
+  noarch: python
+  script: ${{ PYTHON }} -m pip install . --no-deps -vv
+
+requirements:
+  host:
+    - python
+    - pip
+    - setuptools
+    - setuptools_scm
+    - setuptools_scm_git_archive
+  run:
+    - python
+    - numpy >=1.4.1
+    - pillow
+    - pyresample >=1.10.3
+    - trollsift
+    - trollimage >=1.5.1
+    - pykdtree
+    - six
+    - pyyaml
+    - xarray >=0.10.1
+    - dask >=0.17.1
+    - h5py
+    - netcdf4
+    - pyspectral
+    - pyorbital
+    - zarr
+
+tests:
+  - python:
+      imports:
+        - satpy
+        - satpy.composites
+        - satpy.enhancements
+        - satpy.readers
+        - satpy.tests
+        - satpy.tests.compositor_tests
+        - satpy.tests.reader_tests
+        - satpy.tests.writer_tests
+        - satpy.writers
+      pip_check: false
+  - requirements:
+      run:
+        - behave
+        - imageio
+        - libtiff
+        - pyhdf
+        - if: py==27
+          then: mock
+
+about:
+  license: GPL-3.0
+  license_file: LICENSE.txt
+  summary: Meteorological processing package
+  description: |
+    Python package for reading and manipulating meteorological remote
+    sensing data and writing it to various image and data file formats.
+  homepage: https://github.com/pytroll/satpy
+  repository: https://github.com/pytroll/satpy
+  documentation: http://satpy.readthedocs.io/en/latest/
+
+extra:
+  recipe-maintainers:
+    - djhoese
+    - mraspaud
+    - adybbroe
+    - pnuu
+

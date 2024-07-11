@@ -1,0 +1,85 @@
+schema_version: 1
+
+context:
+  version: 3.11.2
+
+package:
+  name: libprotobuf
+  version: ${{ version }}
+
+source:
+  - url: https://github.com/google/benchmark/archive/5b7683f49e1e9223cf9927b24f6fd3d6bd82e3f8.tar.gz
+    sha256: 5dc92703f811f94e2aa63bdab07ab749f28a094befa6cdfd5fe177f947590a48
+    target_directory: third_party/benchmark
+  - url: https://github.com/google/googletest/archive/5ec7f0c4a113e2f18ac2c6cc7df51ad6afc24081.tar.gz
+    sha256: 0e2f36e8e403c125fd0ab02171bdb786d3b6b3875b6ccf3b2eb7969be8faecd0
+    target_directory: third_party/googletest
+
+build:
+  # Requires C++ 11, VS 2008 is not supported
+  number: 100
+  skip:
+    - win and vc<14
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    - if: win
+      then: cmake
+    - if: win
+      then: ninja
+    - if: not win
+      then: autoconf
+    - if: not win
+      then: automake
+    - if: not win
+      then: libtool
+    - if: not win
+      then: pkg-config
+    - if: not win
+      then: unzip
+    - if: not win
+      then: make
+  host:
+    - zlib
+  run:
+    - zlib
+  run_exports:
+    - ${{ pin_subpackage('libprotobuf', max_pin='x.x') }}
+
+tests:
+  - script:
+      - protoc --help
+      - if: not win
+        then: test -f ${PREFIX}/lib/libprotobuf.a
+      - if: not win
+        then: test -f ${PREFIX}/lib/libprotobuf${SHLIB_EXT}
+      - if: win
+        then: if not exist %PREFIX%\\Library\\lib\\libprotoc.lib exit 1
+      - if: win
+        then: if not exist %PREFIX%\\Library\\lib\\libprotobuf.lib exit 1
+      - if: win
+        then: if not exist %PREFIX%\\Library\\lib\\libprotobuf-lite.lib exit 1
+
+about:
+  license: BSD-3-Clause
+  license_file: LICENSE
+  summary: "Protocol Buffers - Google's data interchange format. C++ Libraries"
+  description: |
+    Protocol buffers are Google's language-neutral,
+    platform-neutral, extensible mechanism for serializing structured data-
+    think XML, but smaller, faster, and simpler.
+  homepage: https://developers.google.com/protocol-buffers/
+  documentation: https://developers.google.com/protocol-buffers/
+
+extra:
+  recipe-maintainers:
+    - dopplershift
+    - jakirkham
+    - jjhelmus
+    - ocefpaf
+    - wesm
+    - hajapy
+    - xhochy
+

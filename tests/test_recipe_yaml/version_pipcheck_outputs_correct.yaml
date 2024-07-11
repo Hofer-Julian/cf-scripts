@@ -1,0 +1,161 @@
+schema_version: 1
+
+context:
+  name: camb
+  version: 1.1.0
+
+recipe:
+  name: ${{ name|lower }}
+  version: ${{ version }}
+
+source:
+  url: https://github.com/cmbant/CAMB/archive/${{ version }}.tar.gz
+  sha256: 3ab4eec98a3f5e97c8acef66a79778db380b66afd577712e07a342fdd6073113
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - if: not win
+      then: ${{ compiler('c') }}
+    - if: not win
+      then: ${{ compiler('fortran') }}
+    - if: win
+      then: m2w64-toolchain
+    - if: not win
+      then: git
+    - if: win
+      then: m2-git
+    - if: not win
+      then: make
+    - if: win
+      then: m2-make
+    - python
+    - setuptools
+    - pip
+
+outputs:
+  - package:
+      name: camb
+    requirements:
+      build:
+        # these are needed to convince conda-build to pin the requirements
+        - if: not win
+          then: ${{ compiler('c') }}
+        - if: not win
+          then: ${{ compiler('fortran') }}
+      host:
+        - python
+        - pip
+        - setuptools
+      run:
+        - python
+        - numpy
+        - matplotlib
+        - six
+        - mock
+        - sympy >=1.0
+        - scipy >=1.0
+        - if: not win
+          then: ${{ compiler('fortran') }}
+    test:  # [not win]
+      imports:  # [not win]
+        - camb  # [not win]
+      requires:  # [not win]
+        - pip  # [not win]
+      commands:  # [not win]
+        - python -m pip check  # [not win]
+    tests:
+      - python:
+          imports:
+            - if: win
+              then: camb
+          pip_check: false
+      - requirements:
+          run:
+            - if: win
+              then: pip
+        script:
+          - if: win
+            then: python -m pip check
+    script: install-pycamb.sh  # [not win]
+    script: install-pycamb.bat  # [win]
+  - package:
+      name: pycamb
+    requirements:
+      host:
+        - python
+      run:
+        - python
+        - ${{ pin_subpackage('camb', exact=True) }}
+    tests:
+      - python:
+          imports:
+            - camb
+          pip_check: false
+      - requirements:
+          run:
+            - pip
+        script:
+          - python -m pip check
+
+tests:
+  - python:
+      imports:
+        - camb
+  - commands:
+      - "echo '2'"
+      - python -m pip check
+    files:
+      recipe:
+        - params.ini
+        - test_pycamb.py
+        - if: win
+          then: run_test.sh
+    requirements:
+      run:
+        - pip
+    script:
+      - if: win
+        then: "echo '2'"
+      - if: win
+        then: python -m pip check
+
+about:
+  license: modified LGPL
+  license_file: ${{ RECIPE_DIR }}/LICENSE
+  summary: Code for Anisotropies in the Microwave Background
+  description: |
+    Code for Anisotropies in the Microwave Background
+    by Antony Lewis and Anthony Challinor
+
+    Features:
+    - Support for closed, open and flat models
+    - Scalar, vector and tensor modes including polarization
+    - Output Cl, matter transfer functions, matter power spectrum and σ8
+    - Fast computation to ~0.3-0.1% accuracy, with controllable accuracy level
+    - Relatively structured and easily extendable Fortran 90 code
+    - Efficient support for massive neutrinos
+    - Absolute computations from correctly normalized initial power spectra
+    - Computation of lensed CMB power spectra and lensing potential power spectrum
+    - Internally parallelized for fast execution on multi-processor machines
+    - Use CAMB with CosmoMC for Monte-Carlo parameter estimation
+    - Constant equation of state quintessence (or variable PPF)
+    - Support for general correlated adiabatic/isocurvature initial conditions
+    - Accurate full-sky calculation of lensed power spectra (astro-ph/0502425)
+    - Integrated interface to HALOFIT for non-linear fitting
+    - support for arbitrary neutrino mass splittings
+    - For 21cm, lensing and number count power spectra see this extension
+    - For perturbed recombination and effect on small-scale baryons see this extension
+    - Calculation of local primordial and CMB lensing bispectra
+    - Easy-to-use Python wrapper
+  homepage: https://camb.info/
+  repository: https://github.com/cmbant/CAMB
+  documentation: https://camb.info/readme.html
+
+extra:
+  recipe-maintainers:
+    - beckermr
+    - cmbant
+

@@ -1,0 +1,67 @@
+schema_version: 1
+
+context:
+  name: assimp
+  version: 4.1.0
+  sha256: ce3589f9455c743e993fd802bdaaed72838cd3f4
+
+package:
+  name: ${{ name }}
+  version: ${{ version }}
+
+source:
+  url: https://github.com/assimp/assimp/archive/v${{ version }}.tar.gz
+  sha1: ${{ sha256 }}
+
+build:
+  number: 2
+  skip:
+    - win and vc<14
+
+requirements:
+  build:
+    - ${{ compiler('cxx') }}
+    - ${{ compiler('c') }}
+    - cmake
+    - make
+  host:
+    - boost-cpp
+    - zlib
+  run:
+    - boost-cpp
+    - zlib
+  run_exports:
+    - ${{ pin_subpackage(name, max_pin='x.x') }}
+
+tests:
+  - script:
+      - if: unix
+        then: test -f $PREFIX/include/assimp/anim.h
+      - if: unix
+        then: test -f $PREFIX/lib/libassimp${SHLIB_EXT}
+      - if: win
+        then:
+          - if exist %LIBRARY_PREFIX%\include\assimp\anim.h (exit 0) else (exit
+          - 1)
+      - if: win
+        then:
+          - if exist %LIBRARY_PREFIX%\lib\assimp-vc140-mt.lib (exit 0) else (exit
+          - 1)
+      - if: win
+        then:
+          - if exist %LIBRARY_PREFIX%\bin\assimp-vc140-mt.dll (exit 0) else (exit
+          - 1)
+
+about:
+  summary: |
+    A library to import and export various 3d-model-formats including
+    scene-post-processing to generate missing render data.
+  license: Modified BSD
+  license_file: LICENSE
+  homepage: https://assimp.org/
+
+extra:
+  recipe-maintainers:
+    - wolfv
+    - lesteve
+

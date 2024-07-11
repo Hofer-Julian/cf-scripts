@@ -1,0 +1,58 @@
+schema_version: 1
+
+context:
+  version: 1.3-1
+  posix: "'m2-' if win else ''"
+  native: "'m2w64-' if win else ''"
+
+package:
+  name: r-rprojroot
+  version: ${{ version|replace("-", "_") }}
+
+source:
+  url:
+    - https://cran.r-project.org/src/contrib/rprojroot_${{ version }}.tar.gz
+    - https://cran.r-project.org/src/contrib/Archive/rprojroot/rprojroot_${{ version }}.tar.gz
+  sha256: 628c2c064b2b288264ecab6e670f9fd1d380b017a546926019fec301a5c82fca
+  file_name: rprojroot_${{ version }}.tar.gz
+
+build:
+  number: 100
+  skip:
+    - win32
+  rpaths:
+    - lib/R/lib/
+    - lib/
+
+requirements:
+  build:
+    - r-base
+    - r-backports
+  run:
+    - r-base
+    - r-backports
+
+tests:
+  - script:
+      - if: not win
+        then: "$R -e \"library('rprojroot')\""
+      - if: win
+        then: "\"%R%\" -e \"library('rprojroot')\""
+
+about:
+  license: GPL-3.0
+  summary: |
+    Robust, reliable and flexible paths to files below a project root. The 'root' of a project
+    is defined as a directory that matches a certain criterion, e.g., it contains a certain regular file.
+  license_file: ${{ env.get("PREFIX") }}/lib/R/share/licenses/GPL-3
+  license_file: {{ env.get("PREFIX") }}\R\share\licenses\GPL-3  # [win]
+  homepage: https://github.com/krlmlr/rprojroot, https://krlmlr.github.io/rprojroot
+
+extra:
+  recipe-maintainers:
+    - johanneskoester
+    - bgruening
+    - daler
+    - jdblischak
+    - cbrueffer
+
