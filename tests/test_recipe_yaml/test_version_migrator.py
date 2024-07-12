@@ -1,11 +1,11 @@
 import logging
 import os
 import random
+from pathlib import Path
 
 import pytest
 from flaky import flaky
-from test_migrators import run_test_migration
-from pathlib import Path
+from test_recipe_yaml.migration_utils import run_test_migration
 
 from conda_forge_tick.migrators import Version
 from conda_forge_tick.migrators.version import VersionMigrationError
