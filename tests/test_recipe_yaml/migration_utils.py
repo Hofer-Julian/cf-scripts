@@ -1,4 +1,8 @@
+from pathlib import Path
+
+from conda_forge_tick.feedstock_parser import populate_feedstock_attributes
 from conda_forge_tick.migrators.core import Migrator
+from conda_forge_tick.utils import parse_recipe_yaml
 
 
 def run_test_migration(
@@ -8,28 +12,29 @@ def run_test_migration(
     kwargs: dict,
     prb: dict,
     mr_out: dict,
+    tmp_path: Path,
     should_filter=False,
-    tmpdir=None,
     make_body=False,
 ):
     if mr_out:
         mr_out.update(bot_rerun=False)
-    with open(os.path.join(tmpdir, "meta.yaml"), "w") as f:
-        f.write(inp)
+
+    tmp_path.joinpath("recipe.yaml").write_text(inp)
 
     # read the conda-forge.yml
-    if os.path.exists(os.path.join(tmpdir, "..", "conda-forge.yml")):
-        with open(os.path.join(tmpdir, "..", "conda-forge.yml")) as fp:
-            cf_yml = fp.read()
+    conda_forge_yml = tmp_path.joinpath("..", "conda-forge.yml")
+    if conda_forge_yml.exists():
+        cf_yml = conda_forge_yml.read_text()
     else:
         cf_yml = "{}"
 
-    # Load the meta.yaml (this is done in the graph)
+    # Load the recipe.yaml (this is done in the graph)
     try:
-        name = parse_meta_yaml(inp)["package"]["name"]
+        name = parse_recipe_yaml(inp)["package"]["name"]
     except Exception:
         name = "blah"
 
+    # TODO: Adapt `populate_feedstock_attributes`
     pmy = populate_feedstock_attributes(name, {}, inp, cf_yml)
 
     # these are here for legacy migrators
@@ -52,13 +57,13 @@ def run_test_migration(
         return pmy
 
     m.run_pre_piggyback_migrations(
-        tmpdir,
+        tmp_path,
         pmy,
         hash_type=pmy.get("hash_type", "sha256"),
     )
-    mr = m.migrate(tmpdir, pmy, hash_type=pmy.get("hash_type", "sha256"))
+    mr = m.migrate(tmp_path, pmy, hash_type=pmy.get("hash_type", "sha256"))
     m.run_post_piggyback_migrations(
-        tmpdir,
+        tmp_path,
         pmy,
         hash_type=pmy.get("hash_type", "sha256"),
     )
@@ -68,7 +73,7 @@ def run_test_migration(
             feedstock_name=name,
             attrs=pmy,
         )
-        fctx.feedstock_dir = os.path.dirname(tmpdir)
+        fctx.feedstock_dir = os.path.dirname(tmp_path)
         m.effective_graph.add_node(name)
         m.effective_graph.nodes[name]["payload"] = MockLazyJson({})
         m.pr_body(fctx)
@@ -79,7 +84,7 @@ def run_test_migration(
 
     pmy["pr_info"] = {}
     pmy["pr_info"].update(PRed=[frozen_to_json_friendly(mr)])
-    with open(os.path.join(tmpdir, "meta.yaml")) as f:
+    with open(os.path.join(tmp_path, "meta.yaml")) as f:
         actual_output = f.read()
     # strip jinja comments
     pat = re.compile(r"{#.*#}")

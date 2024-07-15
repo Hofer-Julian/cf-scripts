@@ -51,8 +51,7 @@ YAML_PATH = Path(__file__).parent / "test_yaml"
         # ("boostcpp", "1.74.0"),
     ],
 )
-@flaky
-def test_version_up(case, new_ver, tmpdir, caplog):
+def test_version_up(case, new_ver, tmp_path, caplog):
     caplog.set_level(
         logging.DEBUG,
         logger="conda_forge_tick.migrators.version",
@@ -76,7 +75,7 @@ def test_version_up(case, new_ver, tmpdir, caplog):
             "migrator_version": Version.migrator_version,
             "version": new_ver,
         },
-        tmpdir=tmpdir,
+        tmp_path=tmp_path,
     )
 
 

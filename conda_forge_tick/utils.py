@@ -6,6 +6,7 @@ import itertools
 import json
 import logging
 import os
+from pathlib import Path
 import pprint
 import subprocess
 import sys
@@ -20,6 +21,8 @@ import jinja2
 import jinja2.sandbox
 import networkx as nx
 import ruamel.yaml
+
+from conda_forge_tick.migrators_types import RecipeYamlTypedDict
 
 from . import sensitive_env
 from .lazy_json_backends import LazyJson
@@ -447,6 +450,75 @@ def parse_meta_yaml(
         )
 
 
+# TODO
+def parse_recipe_yaml(
+    text: str,
+    for_pinning: bool = False,
+    platform: str | None = None,
+    arch: str | None = None,
+    variants_path: Path | None = None,
+    orig_variants_path: Path | None = None,
+    log_debug: bool = False,
+    use_container: bool = True,
+):
+    """Parse the meta.yaml.
+
+    Parameters
+    ----------
+    text : str
+        The raw text in conda-forge feedstock meta.yaml file
+    for_pinning : bool, optional
+        If True, render the meta.yaml for pinning migrators, by default False.
+    platform : str, optional
+        The platform (e.g., 'linux', 'osx', 'win').
+    arch : str, optional
+        The CPU architecture (e.g., '64', 'aarch64').
+    variants_path : Path, optional
+        The path to variants file.
+    orig_variants_path : str, optional
+        If not None, the original variants file to put next to
+        the recipe while parsing.
+    log_debug : bool, optional
+        If True, print extra debugging info. Default is False.
+    use_container
+        Whether to use a container to run the parsing.
+        If None, the function will use a container if the environment
+        variable `CF_TICK_IN_CONTAINER` is 'false'. This feature can be
+        used to avoid container in container calls.
+
+    Returns
+    -------
+    dict :
+        The parsed YAML dict. If parsing fails, returns an empty dict. May raise
+        for some errors. Have fun.
+    """
+    in_container = os.environ.get("CF_TICK_IN_CONTAINER", "false") == "true"
+    if use_container is None:
+        use_container = not in_container
+
+    if use_container and not in_container:
+        raise NotImplementedError()
+        return parse_recipe_yaml_containerized(
+            text,
+            for_pinning=for_pinning,
+            platform=platform,
+            arch=arch,
+            variants_path=variants_path,
+            orig_variants_path=orig_variants_path,
+            log_debug=log_debug,
+        )
+    else:
+        return parse_recipe_yaml_local(
+            text,
+            for_pinning=for_pinning,
+            platform=platform,
+            arch=arch,
+            variants_path=variants_path,
+            orig_variants_path=orig_variants_path,
+            log_debug=log_debug,
+        )
+
+
 def parse_meta_yaml_containerized(
     text: str,
     for_pinning=False,
@@ -615,6 +687,84 @@ def parse_meta_yaml_local(
             )
 
 
+def parse_recipe_yaml_local(
+    text: str,
+    for_pinning: bool = False,
+    platform: str | None = None,
+    arch: str | None = None,
+    variants_path: Path | None = None,
+    orig_variants_path: Path | None = None,
+    log_debug: bool = False,
+) -> RecipeYamlTypedDict:
+    """Parse the recipe.yaml.
+
+    Parameters
+    ----------
+    text : str
+        The raw text in conda-forge feedstock recipe.yaml file
+    for_pinning : bool, optional
+        If True, render the meta.yaml for pinning migrators, by default False.
+    platform : str, optional
+        The platform (e.g., 'linux', 'osx', 'win').
+    arch : str, optional
+        The CPU architecture (e.g., '64', 'aarch64').
+    variants_path : str, optional
+        The path to the variants file.
+    orig_variants_path : str, optional
+        If not None, the original variants file to put next to
+        the recipe while parsing.
+    log_debug : bool, optional
+        If True, print extra debugging info. Default is False.
+
+    Returns
+    -------
+    dict :
+        The parsed YAML dict. If parsing fails, returns an empty dict. May raise
+        for some errors. Have fun.
+    """
+
+    def _run(*, use_orig_variants_path):
+        return _parse_recipe_yaml_impl(
+            text,
+            for_pinning=for_pinning,
+            platform=platform,
+            arch=arch,
+            variants_path=variants_path,
+            log_debug=log_debug,
+            orig_variants_path=(orig_variants_path if use_orig_variants_path else None),
+        )
+
+    try:
+        return _parse_recipe_yaml_impl(
+            text,
+            for_pinning=for_pinning,
+            platform=platform,
+            arch=arch,
+            variants_path=variants_path,
+            log_debug=log_debug,
+            orig_variants_path=orig_variants_path,
+        )
+    except (SystemExit, Exception):
+        logger.debug("parsing w/ variants.yaml failed! " "trying without...")
+        try:
+            return _parse_recipe_yaml_impl(
+                text,
+                for_pinning=for_pinning,
+                platform=platform,
+                arch=arch,
+                variants_path=variants_path,
+                log_debug=log_debug,
+            )
+        except (SystemExit, Exception) as e:
+            raise RuntimeError(
+                "rattler-build error: %s\n%s"
+                % (
+                    repr(e),
+                    traceback.format_exc(),
+                ),
+            )
+
+
 def _parse_meta_yaml_impl(
     text: str,
     for_pinning=False,
@@ -660,6 +810,130 @@ def _parse_meta_yaml_impl(
                     arch=arch,
                     variant_config_files=[
                         cbc_path,
+                    ],
+                )
+                _cbc, _ = conda_build.variants.get_package_combined_spec(
+                    tmpdir,
+                    config=config,
+                )
+                return config, _cbc
+
+            if not log_debug:
+                fout = io.StringIO()
+                ferr = io.StringIO()
+                # this code did use wulritzer.sys_pipes but that seemed
+                # to cause conda-build to hang
+                # versions:
+                #   wurlitzer 3.0.2 py38h50d1736_1    conda-forge
+                #   conda     4.11.0           py38h50d1736_0    conda-forge
+                #   conda-build   3.21.7           py38h50d1736_0    conda-forge
+                with (
+                    contextlib.redirect_stdout(
+                        fout,
+                    ),
+                    contextlib.redirect_stderr(ferr),
+                ):
+                    config, _cbc = _run_parsing()
+            else:
+                config, _cbc = _run_parsing()
+
+            cfg_as_dict = {}
+            for var in explode_variants(_cbc):
+                try:
+                    m = MetaData(tmpdir, config=config, variant=var)
+                except SystemExit as e:
+                    raise RuntimeError(repr(e))
+                cfg_as_dict.update(conda_build.environ.get_dict(m=m))
+
+            for key in cfg_as_dict:
+                try:
+                    if cfg_as_dict[key].startswith("/"):
+                        cfg_as_dict[key] = key
+                except Exception as e:
+                    logger.debug(
+                        "key-val not string: %s: %s", key, cfg_as_dict[key], exc_info=e
+                    )
+                    pass
+
+        cbc = Config(
+            platform=platform,
+            arch=arch,
+            variant=cfg_as_dict,
+        )
+    else:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "meta.yaml"), "w") as fp:
+                fp.write(text)
+
+            _cfg = {}
+            if platform is not None:
+                _cfg["platform"] = platform
+            if arch is not None:
+                _cfg["arch"] = arch
+            cbc = Config(**_cfg)
+
+            try:
+                m = MetaData(tmpdir)
+                cfg_as_dict = conda_build.environ.get_dict(m=m)
+            except SystemExit as e:
+                raise RuntimeError(repr(e))
+
+    logger.debug("jinja2 environmment:\n%s", pprint.pformat(cfg_as_dict))
+
+    if for_pinning:
+        content = _render_meta_yaml(text, for_pinning=for_pinning, **cfg_as_dict)
+    else:
+        content = _render_meta_yaml(text, **cfg_as_dict)
+
+    try:
+        return parse(content, cbc)
+    except Exception:
+        import traceback
+
+        logger.debug("parse failure:\n%s", traceback.format_exc())
+        logger.debug("parse template: %s", text)
+        logger.debug("parse context:\n%s", pprint.pformat(cfg_as_dict))
+        raise
+
+
+def _parse_recipe_yaml_impl(
+    text: str,
+    for_pinning: bool = False,
+    platform: str | None = None,
+    arch: str | None = None,
+    variants_path: Path | None = None,
+    log_debug: bool = False,
+    orig_variants_path: Path | None = None,
+) -> RecipeYamlTypedDict:
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        log_debug = True
+
+    if variants_path is not None and arch is not None and platform is not None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            tmp_path.joinpath("recipe.yaml").write_text(text)
+
+            if orig_variants_path is not None and orig_variants_path.exists():
+                tmp_path.joinpath("variants.yaml").write_text(
+                    orig_variants_path.read_text()
+                )
+
+            def _run_parsing():
+                logger.debug(
+                    "parsing for platform %s with variants %s and arch %s"
+                    % (
+                        platform,
+                        variants_path,
+                        arch,
+                    ),
+                )
+                raise NotImplementedError()
+                config = conda_build.config.get_or_merge_config(
+                    None,
+                    platform=platform,
+                    arch=arch,
+                    variant_config_files=[
+                        variants_path,
                     ],
                 )
                 _cbc, _ = conda_build.variants.get_package_combined_spec(

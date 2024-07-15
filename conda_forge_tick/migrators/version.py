@@ -194,6 +194,7 @@ class Version(Migrator):
         **kwargs: Any,
     ) -> "MigrationUidTypedDict":
         version = attrs["new_version"]
+        breakpoint()
 
         with open(os.path.join(recipe_dir, "meta.yaml")) as fp:
             raw_meta_yaml = fp.read()
