@@ -120,6 +120,7 @@ def test_version_up(case, new_ver, tmpdir, caplog):
     [
         ("pypi_url", "0.7.1"),
         ("jolt", "5.2.0"),
+        ("cranmirror", "0.3.3"),
     ],
 )
 @flaky
