@@ -601,22 +601,22 @@ def _update_version_feedstock_dir_local(
 ) -> (bool, set):
     feedstock_path = Path(feedstock_dir)
 
-    recipe = feedstock_path / "recipe" / "meta.yaml"
-    if recipe.exists():
+    recipe_path = None
+    recipe_path_v0 = feedstock_path / "recipe" / "meta.yaml"
+    recipe_path_v1 = feedstock_path / "recipe" / "recipe.yaml"
+    if recipe_path_v0.exists():
+        recipe_path = recipe_path_v0
         updated_meta_yaml, errors = update_version(
-            recipe.read_text(), version, hash_type=hash_type
+            recipe_path_v0.read_text(), version, hash_type=hash_type
         )
+    elif recipe_path_v1.exists():
+        recipe_path = recipe_path_v1
+        updated_meta_yaml, errors = update_version_v1(feedstock_dir, version, hash_type)
     else:
-        recipe = feedstock_path / "recipe" / "recipe.yaml"
-        if recipe.exists():
-            updated_meta_yaml, errors = update_version_v1(
-                feedstock_dir, version, hash_type
-            )
-        else:
-            return False, {"no recipe found"}
+        return False, {"no recipe found"}
 
     if updated_meta_yaml is not None:
-        recipe.write_text(updated_meta_yaml)
+        recipe_path.write_text(updated_meta_yaml)
 
     return updated_meta_yaml is not None, errors
 
@@ -702,7 +702,8 @@ def update_version_v1(
 
     feedstock_dir = Path(feedstock_dir)
     recipe_path = feedstock_dir / "recipe" / "recipe.yaml"
-    recipe_yaml = load_yaml(recipe_path.read_text())
+    recipe_text = recipe_path.read_text()
+    recipe_yaml = load_yaml(recipe_text)
     variants = feedstock_dir.glob(".ci_support/*.yaml")
     # load all variants
     variants = [load_yaml(variant.read_text()) for variant in variants]
@@ -714,7 +715,14 @@ def update_version_v1(
         recipe_yaml, variants, override_version=version
     )
 
-    recipe_text = recipe_path.read_text()
+    # mangle the version if it is R
+    for source in rendered_sources:
+        if isinstance(source.template, list):
+            if any([_is_r_url(t) for t in source.template]):
+                version = version.replace("_", "-")
+        else:
+            if _is_r_url(source.template):
+                version = version.replace("_", "-")
 
     # update the version with a regex replace
     for line in recipe_text.splitlines():
@@ -759,8 +767,8 @@ def update_version_v1(
 
                 # convert back to v1 minijinja template
                 new_tmpl = new_tmpl.replace("{{", "${{")
-                if new_tmpl != source.template:
-                    recipe_text = recipe_text.replace(source.template, new_tmpl)
+                if new_tmpl != template:
+                    recipe_text = recipe_text.replace(template, new_tmpl)
 
                 break
 
