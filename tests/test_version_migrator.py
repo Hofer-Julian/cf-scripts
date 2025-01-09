@@ -120,6 +120,9 @@ def test_version_up(case, new_ver, tmpdir, caplog):
     [
         ("pypi_url", "0.7.1"),
         ("jolt", "5.2.0"),
+        ("build_number_via_context", "0.20.1"),
+        ("build_as_expr", "3.6.2"),
+        ("conditional_sources", "3.24.11"),
         ("cranmirror", "0.3.3"),
     ],
 )
@@ -132,10 +135,6 @@ def test_version_up_v1(case, new_ver, tmpdir, caplog):
 
     in_yaml = (YAML_V1_PATH / f"version_{case}.yaml").read_text()
     out_yaml = (YAML_V1_PATH / f"version_{case}_correct.yaml").read_text()
-
-    # create a tempdir that looks like a feedstock with a recipe/recipe.yaml file
-    recipe_dir = tmpdir.mkdir("recipe")
-    recipe_dir.join("recipe.yaml").write(in_yaml)
 
     kwargs = {"new_version": new_ver}
     if case == "sha1":
